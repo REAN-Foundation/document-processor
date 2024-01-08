@@ -3,6 +3,7 @@ from fastapi import File, UploadFile
 from app.services.login_service import UserLogin
 from app.services.pdf_reader_service import PdfReader
 from app.services.reminder_service import Reminder
+from app.services.notification_service import AdminNotification
 import os
 
 ###############################################################################
@@ -26,12 +27,16 @@ async def handle(file: UploadFile = File(...)):
 
     # 4. Send one-time-reminders
     reminder = Reminder()
+    # reminder_date = '2023-11-08'
     reminder.create_one_time_reminders(reminder_date, appointments)
     reminder_summary = reminder.summary()
 
+    admin_notification = AdminNotification()
+    admin_notification.admin_notify(reminder_date,reminder_summary)
+
     return {
-        "message" : "Reminders created successfully",
-        "summary" : reminder_summary,
+        "Message" : "Reminders created successfully",
+        "Data" : reminder_summary,
     }
 
 def store_uploaded_file(file: UploadFile):
@@ -41,6 +46,7 @@ def store_uploaded_file(file: UploadFile):
     if not exists:
         os.mkdir(folder_path)
     file_path = os.path.join(folder_path, file.filename)
+    # print(file_path)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     return file_path

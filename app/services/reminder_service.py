@@ -4,8 +4,9 @@ import json
 import os
 import requests
 import urllib.parse
-
+from app.common.utils import validate_mobile
 from app.common.cache import cache
+import pytz
 
 ###############################################################
 
@@ -39,7 +40,7 @@ class Reminder:
         for appointment in appointments:
 
             patient_mobile_number = appointment['PatientMobile']
-            is_valid_mobile = self.validate_mobile(patient_mobile_number)
+            is_valid_mobile = validate_mobile(patient_mobile_number)
             if not is_valid_mobile:
                 print('*Invalid phone-number - ', patient_mobile_number)
                 self.appointments_skipped_count = self.appointments_skipped_count + 1
@@ -64,7 +65,16 @@ class Reminder:
                 user_id = self.create_patient(patient_mobile_number)
                 if user_id == None:
                     raise Exception('Unable to create patient')
+                self.new_patients_added_count = self.new_patients_added_count  + 1
                 self.update_patient(user_id, user_model)
+
+            # First reminder set as soon as pdf upload
+            print(patient_mobile_number) 
+            first_reminder = self.time_of_first_reminder(patient_mobile_number)
+            print(first_reminder)
+            schedule_model = self.get_schedule_create_model(user_id, first_name, appointment,first_reminder, reminder_date)
+            response = self.schedule_reminder(schedule_model)
+            # print(response)
 
             # Send reminders
             is_reminder_set = self.search_reminder(user_id, reminder_date, first_time)
@@ -90,7 +100,7 @@ class Reminder:
         if response.status_code == 200 and not result['Message'] == 'No records found!':
             return True
         else:
-            print(result['Message'])
+            # print(result['Message'])
             return False
 
     def find_patient_by_mobile(self, mobile):
@@ -104,15 +114,6 @@ class Reminder:
             return None
         else:
             return search_result['Data']['Patients']['Items'][0]['UserId']
-
-    def validate_mobile(self, mobile):
-        # if not bool(mobile.strip()) or not mobile.startswith('+1-'):
-        if not bool(mobile.strip()):
-            print('Invalid Mobile Number ', mobile)
-            return False
-        ten_digit = mobile.split('-')[1]
-        if len(ten_digit) == 10 and ten_digit.isnumeric():
-            return True
 
     def create_patient(self, mobile):
         self.url = self.patient_url
@@ -145,6 +146,7 @@ class Reminder:
 
         if patient['PatientMobile'].startswith('+1'):
             body['CurrentTimeZone'] = '-05:00'
+            body['DefaultTimeZone'] = '-05:00'
         return body
 
     def update_patient(self, patient_user_id, update_patient_model):
@@ -158,12 +160,37 @@ class Reminder:
         hour, minute = appointment_time[0].split(':')
         rest = appointment_time[1]
         # appointment_time= '{}:{}:{}'.format(hour,minute,'00')
+        raw_content = {
+            "TemplateName": "appointment_msg",
+            "Variables": {
+                "en": [
+                    {
+                        "type": "text",
+                        "text": "appointment"
+                    },
+                    {
+                        "type": "text",
+                        "text":  reminder_time
+                    }
+                ]
+            },
+            "ButtonIds": [
+                "button_1",
+                "button_2"
+            ],
+            # "ClientName": "GMU"
+            "ClientName": "REAN_BOT",
+            "AppointmentDate": patient['AppointmentTime']
+        }
+
         return {
             'UserId': patient_user_id,
-            'Name': 'Hey {}, you have an appointment schedule at {} with {}'.format(patient_name, patient['AppointmentTime'], patient['Provider']),
+            # 'Name': 'Hey {}, you have an appointment schedule at {} with {}'.format(patient_name, patient['AppointmentTime'], patient['Provider']),
+            'Name': 'appointment reminder',
             'WhenDate': when_date,
             'WhenTime': reminder_time,
-            'NotificationType': 'WhatsApp'
+            'NotificationType': 'WhatsApp',
+            'RawContent':json.dumps(raw_content)
         }
 
     def schedule_reminder(self, schedule_create_model):
@@ -234,6 +261,27 @@ class Reminder:
             'x-api-key': self.api_key,
             'Content-Type': 'application/json'
         }
+    
+    def time_of_first_reminder(self, patient_mobile_number):
+        temp = str(patient_mobile_number)
+        if(temp.startswith('+1')):
+            desired_timezone = 'America/Cancun' 
+            utc_now = datetime.utcnow()
+               # Convert UTC time to the desired time zone
+            desired_timezone_obj = pytz.timezone(desired_timezone)
+            current_time = utc_now.replace(tzinfo=pytz.utc).astimezone(desired_timezone_obj)
+        if(temp.startswith('+91')):
+            desired_timezone = 'Asia/Kolkata' 
+            utc_now = datetime.utcnow()
+               # Convert UTC time to the desired time zone
+            desired_timezone_obj = pytz.timezone(desired_timezone)
+            current_time = utc_now.replace(tzinfo=pytz.utc).astimezone(desired_timezone_obj)
+       
+        new_time = str(current_time + timedelta(minutes=20))
+        date_element = new_time.split(' ')
+        time_element = date_element[1].split('.')
+        first_reminder_time = time_element[0]
+        return first_reminder_time
 
     def summary(self):
 

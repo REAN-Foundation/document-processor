@@ -27,3 +27,11 @@ def get_temp_filepath(file_name):
         os.mkdir(temp_folder)
     return os.path.join(temp_folder, file_name)
 
+def validate_mobile(mobile):
+        # if not bool(mobile.strip()) or not mobile.startswith('+1-'):
+        if not bool(mobile.strip()):
+            print('Invalid Mobile Number ', mobile)
+            return False
+        ten_digit = mobile.split('-')[1]
+        if len(ten_digit) == 10 and ten_digit.isnumeric():
+            return True

@@ -5,6 +5,7 @@ from app.common.utils import get_temp_filepath
 from app.services.login_service import UserLogin
 from app.services.pdf_reader_service import PdfReader
 from app.services.reminder_service import Reminder
+from app.services.notification_service import AdminNotification
 import json
 import os
 
@@ -17,6 +18,7 @@ async def handle(message: Request):
         if subscription_confirmation:
             return await handle_subscription_confirmation(message_data)
         else:
+            print('handling s3 event')
             return await handle_s3_event(message)
     except KeyError:
             raise HTTPException(status_code=400, detail='Unable to handle SNS notification')
@@ -54,12 +56,17 @@ async def handle_s3_event(message: Request):
         return ('Unable to find or unable to parse the date')
 
     # 3. Extract the PDF file
+    print('Extracting pdf data')
     appointments = reader.extract_appointments_from_pdf(file_path)
 
     # 4. Send one-time-reminders
     reminder = Reminder()
     reminder.create_one_time_reminders(reminder_date, appointments)
     reminder_summary = reminder.summary()
+
+    
+    admin_notification = AdminNotification()
+    admin_notification.admin_notify(reminder_date,reminder_summary)
 
     return {
         "message" : "Reminders created successfully",
@@ -80,7 +87,7 @@ async def download(message: Request):
         raise HTTPException(status_code=400, detail='Unable to download PDF from S3')
     return local_file_path
 
-def download_pdf_from_s3(bucket_name, object_key):
+async def download_pdf_from_s3(bucket_name, object_key):
     try:
         s3 = boto3.client(
             's3',

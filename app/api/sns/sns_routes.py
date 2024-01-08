@@ -17,6 +17,7 @@ router = APIRouter(
 @router.post("/notify")
 async def handle_sns_notification(message: Request):
     try:
+        print("Notification received")
         result = await handle(message)
         return JSONResponse(content=result)
     except Exception as e:

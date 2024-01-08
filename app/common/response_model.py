@@ -16,5 +16,5 @@ class ResponseStatusTypes(str, Enum):
 
 class ResponseModel(GenericModel, Generic[T]):
     Status: ResponseStatusTypes = Field(description="Status of the response", default=ResponseStatusTypes.Success)
-    Message: str = ""
-    Data: T | None = None
+    Message: str
+    Data: dict[str,int]| None = None
